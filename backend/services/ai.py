@@ -1,61 +1,77 @@
-"""
-LearnScript — AI Orchestration Layer
-=====================================
-The core AI orchestration logic (parallel generation, chunking strategy,
-merge pipeline, and output optimization) has been intentionally excluded
-from this public repository for proprietary reasons.
-
-This module handles:
-  - Parallel OpenAI API calls across 4 output types
-  - Intelligent transcript chunking and context merging
-  - Structured output generation (Notes, Cheatsheet, Code, Mindmap)
-  - Error recovery and partial result handling
-
-Contact: https://www.linkedin.com/in/mohit-jhalani-3a282856/
-Live demo: https://learnscript.vercel.app
-"""
-
+import asyncio
 import os
-from openai import AsyncOpenAI
+from pathlib import Path
+from dotenv import load_dotenv
 
-# The OpenAI client is initialized from environment variables.
-# See .env.example for required keys.
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Explicit path — works regardless of where uvicorn is launched from
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
+
+from openai import AsyncOpenAI
+from services.prompts import (
+    notes_system, notes_user,
+    cheatsheet_system, cheatsheet_user,
+    code_system, code_user,
+    mindmap_system, mindmap_user,
+    merge_system, merge_user,
+)
+from services.chunker import chunk_transcript
+
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise RuntimeError("OPENAI_API_KEY not found. Check your .env file.")
+
+client = AsyncOpenAI(api_key=api_key)
+MODEL = "gpt-4o-mini"
+
+
+async def call_llm(system: str, user: str, max_tokens: int = 1500) -> str:
+    response = await client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_tokens=max_tokens,
+        temperature=0.3,
+    )
+    return response.choices[0].message.content.strip()
 
 
 async def generate_notes(transcript: str) -> str:
-    """Generate structured study notes from a lecture transcript."""
-    raise NotImplementedError(
-        "Core AI orchestration logic has been removed for proprietary reasons."
-    )
+    chunks = chunk_transcript(transcript)
 
+    tasks = [
+        call_llm(notes_system(), notes_user(chunk, i, len(chunks)))
+        for i, chunk in enumerate(chunks)
+    ]
+    results = await asyncio.gather(*tasks)
 
-async def generate_cheatsheet(transcript: str) -> str:
-    """Generate a quick-reference cheat sheet from a lecture transcript."""
-    raise NotImplementedError(
-        "Core AI orchestration logic has been removed for proprietary reasons."
-    )
+    if len(results) == 1:
+        return results[0]
 
-
-async def generate_code(transcript: str) -> str:
-    """Extract and generate clean code examples from a lecture transcript."""
-    raise NotImplementedError(
-        "Core AI orchestration logic has been removed for proprietary reasons."
-    )
-
-
-async def generate_mindmap(transcript: str) -> str:
-    """Generate a Mermaid mindmap diagram from a lecture transcript."""
-    raise NotImplementedError(
-        "Core AI orchestration logic has been removed for proprietary reasons."
-    )
+    combined = "\n\n---\n\n".join(results)
+    return await call_llm(merge_system(), merge_user(combined[:8000]), max_tokens=2000)
 
 
 async def generate_all(transcript: str) -> dict:
-    """
-    Orchestrate parallel generation of all 4 output types.
-    Returns a dict with keys: notes, cheatsheet, code, mindmap.
-    """
-    raise NotImplementedError(
-        "Core AI orchestration logic has been removed for proprietary reasons."
+    notes_task = generate_notes(transcript)
+    cheatsheet_task = call_llm(
+        cheatsheet_system(), cheatsheet_user(transcript), max_tokens=1200
     )
+    code_task = call_llm(
+        code_system(), code_user(transcript), max_tokens=1500
+    )
+    mindmap_task = call_llm(
+        mindmap_system(), mindmap_user(transcript), max_tokens=800
+    )
+
+    notes, cheatsheet, code, mindmap = await asyncio.gather(
+        notes_task, cheatsheet_task, code_task, mindmap_task
+    )
+
+    return {
+        "notes": notes,
+        "cheatsheet": cheatsheet,
+        "code": code,
+        "mindmap": mindmap,
+    }
