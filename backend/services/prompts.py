@@ -184,3 +184,42 @@ TRANSCRIPT:
 
 Output the mermaid block first, then the Topics Covered section.
 """
+
+# ── Helper functions used by ai.py ────────────────────────────────────────────
+
+def notes_system() -> str:
+    return "You are an expert educator writing premium study notes for engineering students."
+
+def notes_user(chunk: str, index: int, total: int) -> str:
+    part = f"(Part {index + 1} of {total})\n\n" if total > 1 else ""
+    return NOTES_PROMPT.format(transcript=f"{part}{chunk}")
+
+def cheatsheet_system() -> str:
+    return "You are creating a premium quick-reference cheat sheet for engineering students."
+
+def cheatsheet_user(transcript: str) -> str:
+    return CHEATSHEET_PROMPT.format(transcript=transcript[:5000])
+
+def code_system() -> str:
+    return "You generate clean, well-commented code examples from lecture transcripts."
+
+def code_user(transcript: str) -> str:
+    return CODE_PROMPT.format(transcript=transcript[:5000])
+
+def mindmap_system() -> str:
+    return "You generate Mermaid mindmap diagrams from lecture transcripts. Follow strict syntax rules."
+
+def mindmap_user(transcript: str) -> str:
+    return MINDMAP_PROMPT.format(transcript=transcript[:4000])
+
+def merge_system() -> str:
+    return (
+        "You are an expert editor. Merge multiple sets of study notes into one cohesive, "
+        "well-organized document. Remove duplicates, preserve all unique content, and maintain "
+        "the formatting rules (headings, bold, LaTeX, tables)."
+    )
+
+def merge_user(combined: str) -> str:
+    return (
+        f"Merge the following study notes into a single well-organized document:\n\n{combined}"
+    )
