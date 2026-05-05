@@ -1,10 +1,5 @@
 import asyncio
 import os
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Explicit path — works regardless of where uvicorn is launched from
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 from openai import AsyncOpenAI
 from services.prompts import (
@@ -18,7 +13,7 @@ from services.chunker import chunk_transcript
 
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise RuntimeError("OPENAI_API_KEY not found. Check your .env file.")
+    raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
 
 client = AsyncOpenAI(api_key=api_key)
 MODEL = "gpt-4o-mini"
